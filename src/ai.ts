@@ -73,7 +73,8 @@ export function getEnemyAIAction(aiCharacter: Character, gameState: GameState): 
         for (const movePos of reachableTiles) {
             // Temporarily simulate being at movePos to check for actions
             const tempAiPosition = movePos;
-            let currentScore = 0; // Score this potential move
+            let currentScore = -Infinity; // Score this potential move, reset for each movePos
+            let actionEnabled = false;
 
             // Can we act after moving?
             if (aiCharacter.canAct) {
@@ -82,35 +83,47 @@ export function getEnemyAIAction(aiCharacter: Character, gameState: GameState): 
                 for (const special of specialAbilities) {
                     const targetsFromNewPos = findCharactersInRange(tempAiPosition, special.range!, sortedPlayerTargets, false);
                     if (targetsFromNewPos.length > 0) {
-                        currentScore = 100 - (targetsFromNewPos[0].stats.currentHp / targetsFromNewPos[0].stats.maxHp) * 50; // Higher score for lower HP target
-                        if (currentScore > bestMoveScore) {
-                            bestMoveScore = currentScore;
-                            bestMoveOption = { movePos, action: { type: 'special', targetId: targetsFromNewPos[0].id, actionToUse: special }};
+                        // Score for special ability: High base + bonus for lower HP target
+                        currentScore = 1000 + (100 - (targetsFromNewPos[0].stats.currentHp / targetsFromNewPos[0].stats.maxHp) * 100);
+                        actionEnabled = true;
+                        // If this is the first action-enabling move found, or it has a higher score, update best option
+                        if (bestMoveOption === null || !bestMoveOption.action || currentScore > bestMoveScore) {
+                             bestMoveScore = currentScore;
+                             bestMoveOption = { movePos, action: { type: 'special', targetId: targetsFromNewPos[0].id, actionToUse: special }};
                         }
+                         // Found a special ability, no need to check attacks from this position
+                        break; 
                     }
                 }
-                // Check attacks from new position (if no better special found)
-                if (currentScore <= bestMoveScore || !bestMoveOption?.action || bestMoveOption.action.type !== 'special') { // only check attacks if special wasn't better
+
+                // If no special ability found from this position, check standard attacks
+                if (!actionEnabled) {
                     const attackActions = aiCharacter.actions.filter(a => a.type === ActionType.ATTACK && a.range);
                     for (const attack of attackActions) {
                         const targetsFromNewPos = findCharactersInRange(tempAiPosition, attack.range!, sortedPlayerTargets, false);
                         if (targetsFromNewPos.length > 0) {
-                            currentScore = 80 - (targetsFromNewPos[0].stats.currentHp / targetsFromNewPos[0].stats.maxHp) * 40;
-                             if (currentScore > bestMoveScore) {
+                            // Score for attack: High base (lower than special) + bonus for lower HP target
+                            currentScore = 800 + (100 - (targetsFromNewPos[0].stats.currentHp / targetsFromNewPos[0].stats.maxHp) * 100);
+                            actionEnabled = true;
+                             // If this is the first action-enabling move found, or it has a higher score, update best option
+                            if (bestMoveOption === null || !bestMoveOption.action || currentScore > bestMoveScore) {
                                 bestMoveScore = currentScore;
                                 bestMoveOption = { movePos, action: { type: 'attack', targetId: targetsFromNewPos[0].id, actionToUse: attack }};
                             }
+                            // Found an attack, no need to check other attacks from this position
+                            break;
                         }
                     }
                 }
             }
             
             // If no action possible after moving from this tile, score based on proximity to closest target
-            if (!bestMoveOption || (bestMoveOption.movePos.x !== movePos.x || bestMoveOption.movePos.y !== movePos.y) || !bestMoveOption.action) {
+            // Only consider this if no action-enabling move has been found yet (bestMoveOption is null or bestMoveOption.action is undefined)
+            if (!actionEnabled && (bestMoveOption === null || !bestMoveOption.action)) {
                  if (sortedPlayerTargets.length > 0) {
                     const closestTarget = sortedPlayerTargets[0];
                     const distToTarget = Math.abs(movePos.x - closestTarget.position.x) + Math.abs(movePos.y - closestTarget.position.y);
-                    currentScore = 50 - distToTarget * 5; // Closer is better
+                    currentScore = 100 - distToTarget * 10; // Closer is better (max 100)
                     if (currentScore > bestMoveScore) {
                         bestMoveScore = currentScore;
                         bestMoveOption = { movePos, action: undefined }; // Just move, no immediate action after
@@ -144,4 +157,3 @@ export function getEnemyAIAction(aiCharacter: Character, gameState: GameState): 
     // This also covers the case where aiCharacter.canAct and aiCharacter.canMove are both false.
     return { type: 'wait' };
 }
-

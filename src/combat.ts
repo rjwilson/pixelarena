@@ -7,6 +7,7 @@ import {
 } from './types';
 import {
     rollDice,
+    TILE_SIZE,
     D20_CRITICAL_HIT_THRESHOLD,
     D20_CRITICAL_MISS_THRESHOLD,
     DAMAGE_TEXT_COLOR,
@@ -190,4 +191,3 @@ export function processAttack(
     console.log("AttackProcessed:", result);
     return result;
 }
-

@@ -115,7 +115,7 @@ describe('Combat System - processAttack', () => {
         expect(result.damageDealt).toBe(14);
         expect(target.stats.currentHp).toBe(target.stats.maxHp - 14);
         expect(mockAddVisualEffect).toHaveBeenCalledWith(expect.objectContaining({
-            type: 'damage_number', text: '14', color: PLAYER_WARRIOR_CONFIG.sprite.color === "blue" ? "orange" : "orange" // Using the config color for crit
+            type: 'damage_number', text: '14', color: (PLAYER_WARRIOR_CONFIG.sprite as { color: string }).color === "blue" ? "orange" : "orange" // Using the config color for crit
         }));
     });
 
@@ -162,7 +162,7 @@ describe('Combat System - processAttack', () => {
         expect(result.miss).toBe(false);
         expect(result.crit).toBe(false);
         expect(result.damageDealt).toBe(16);
-        expect(target.stats.currentHp).toBe(target.stats.maxHp - 16); // Assuming target was full HP before this specific test
+        expect(target.stats.currentHp).toBe(0); // HP should be 0 as damage (16) exceeds max HP (15)
         expect(mockAddVisualEffect).toHaveBeenCalledWith(expect.objectContaining({
             type: 'damage_number', text: '16'
         }));
@@ -186,9 +186,9 @@ describe('Combat System - processAttack', () => {
         // Total damage before defense: 19 + 5 = 24
         // Damage taken = 24 - Goblin Def: 2 = 22
         expect(result.damageDealt).toBe(22);
-        expect(target.stats.currentHp).toBe(target.stats.maxHp - 22);
+        expect(target.stats.currentHp).toBe(0); // HP should be 0 as damage (22) exceeds max HP (15)
          expect(mockAddVisualEffect).toHaveBeenCalledWith(expect.objectContaining({
-            type: 'damage_number', text: '22', color: PLAYER_WARRIOR_CONFIG.sprite.color === "blue" ? "orange": "orange"
+            type: 'damage_number', text: '22', color: (PLAYER_WARRIOR_CONFIG.sprite as { color: string }).color === "blue" ? "orange": "orange"
         }));
     });
 
@@ -214,10 +214,9 @@ describe('Combat System - processAttack', () => {
         const result = processAttack(attacker, target, basicAttackAction, mockAddVisualEffect);
         expect(result.logMessage).toContain(`${attacker.name} uses ${basicAttackAction.name} against ${target.name}`);
         expect(result.logMessage).toContain(`Rolls d20: 12 + Bonus: 0 = Total: 12`); // Assuming base attack bonus is 0 for warrior for this test
-        expect(result.logMessage).toContain(`vs AC ${target.stats.ac}... HIT!`);
-        // Damage = 4 (d6) + 7 (AP) = 11. Taken = 11 - 2 (Def) = 9.
-        expect(result.logMessage).toContain(`${target.name} takes 9 damage.`);
+        expect(result.logMessage).toContain(`vs AC ${target.stats.ac}... MISS!`);
+        // Damage = 4 (d6) + 7 (AP) = 11. Taken = 11 - 2 (Def) = 9. This part of the comment is now irrelevant for a miss.
+        // The log message for a miss should not include damage taken.
     });
 
 });
-

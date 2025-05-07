@@ -1,9 +1,18 @@
 // src/character.ts
-import { Character, CharacterStats, GridPoint, CharacterType, GameAction, ActionType, CharacterConfig } from './types';
+import { Character, CharacterStats, GridPoint, GridTile, CharacterType, GameAction, ActionType, CharacterConfig } from './types';
 import { TILE_SIZE, UI_FONT, rollDice } from './config';
 import { getTile, occupyTile } from './grid'; // For initial placement
 
 let characterIdCounter = 0;
+ 
+/**
+ * Resets the characterIdCounter to 0.
+ * INTENDED FOR TESTING PURPOSES ONLY.
+ */
+export function resetCharacterIdCounter_TEST_HOOK(): void {
+    characterIdCounter = 0;
+}
+
 
 /**
  * Creates a new character instance.
@@ -210,4 +219,3 @@ export function resetCharacterTurnActions(character: Character): void {
         character.canAct = true;
     }
 }
-

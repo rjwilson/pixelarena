@@ -22,7 +22,7 @@ import { processAttack } from './combat';
 import { getEnemyAIAction, AIActionDecision } from './ai';
 
 // --- Global Game State ---
-export let gameState: GameState; // Exporting for direct access or for the test hook
+export let gameState: GameState; 
 
 // --- Canvas and Context ---
 let canvas: HTMLCanvasElement;
@@ -32,7 +32,7 @@ let ctx: CanvasRenderingContext2D;
 let currentlySelectedTile: GridPoint | null = null;
 let hoveredTile: GridPoint | null = null;
 let reachableMovementTiles: GridPoint[] = [];
-let attackableTargetTiles: GridPoint[] = [];
+let attackableTargetTiles: GridPoint[] = []; // Used by player actions
 let specialAbilityTargetTiles: GridPoint[] = [];
 
 // --- Visual Effects ---
@@ -44,12 +44,22 @@ let visualEffects: VisualEffect[] = [];
 export function initializeGame(): void {
     canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     if (!canvas) {
-        console.error("Canvas element not found!");
-        return;
+        const errorMsg = "CRITICAL ERROR: Canvas element with ID 'game-canvas' not found in the DOM during initializeGame.";
+        console.error(errorMsg);
+        if (typeof process !== 'undefined' && process.env && (process.env.VITEST_WORKER_ID || process.env.NODE_ENV === 'test')) {
+            throw new Error(errorMsg + " Check test's DOM setup (setupDOMProgrammatically).");
+        }
+        return; 
     }
-    ctx = canvas.getContext('2d')!;
+
+    // @ts-ignore 
+    ctx = canvas.getContext('2d');
     if (!ctx) {
-        console.error("2D context not available!");
+        const errorMsg = "CRITICAL ERROR: Failed to get 2D rendering context from canvas.";
+        console.error(errorMsg);
+        if (typeof process !== 'undefined' && process.env && (process.env.VITEST_WORKER_ID || process.env.NODE_ENV === 'test')) {
+            throw new Error(errorMsg + " Check test's canvas context mock.");
+        }
         return;
     }
 
@@ -100,7 +110,7 @@ export function initializeGame(): void {
 
     updateCharacterDisplays(gameState.characters);
     updateActionLog(gameState.actionLog);
-    updateTurnIndicator(gameState.activeCharacterId ? gameState.characters.find(c => c.id === gameState.activeCharacterId) : null);
+    updateTurnIndicator(gameState.activeCharacterId ? gameState.characters.find(c => c.id === gameState.activeCharacterId) ?? null : null);
     updateActionButtonsForCurrentCharacter();
 
     console.log("Game Initialized", gameState);
@@ -109,11 +119,8 @@ export function initializeGame(): void {
     }
 }
 
-/**
- * Starts the turn for the current character in the turn order.
- */
 function startTurn(): void {
-    if (gameState.isCombatOver) return;
+    if (!gameState || gameState.isCombatOver) return; 
 
     gameState.activeCharacterId = gameState.turnOrder[gameState.currentTurnIndex];
     const activeCharacter = gameState.characters.find(c => c.id === gameState.activeCharacterId);
@@ -147,14 +154,17 @@ function startTurn(): void {
     }
 }
 
-/**
- * Manages the AI's action phase.
- */
 function processEnemyActionPhase(enemyCharacter: Character): void {
-    if (!enemyCharacter.isAlive || gameState.isCombatOver || enemyCharacter.type === CharacterType.PLAYER) {
-        if (enemyCharacter.type !== CharacterType.PLAYER && (!enemyCharacter.isAlive || gameState.isCombatOver)) {
-            if (gameState.activeCharacterId === enemyCharacter.id) endTurn();
+    if (!gameState || !enemyCharacter.isAlive || gameState.isCombatOver || enemyCharacter.type === CharacterType.PLAYER) {
+        if (enemyCharacter.type !== CharacterType.PLAYER && (!enemyCharacter.isAlive || (gameState && gameState.isCombatOver))) {
+            if (gameState && gameState.activeCharacterId === enemyCharacter.id) endTurn();
         }
+        return;
+    }
+
+    if (!enemyCharacter.canMove && !enemyCharacter.canAct) {
+        addMessageToActionLog(`${enemyCharacter.name} has no more actions or moves.`, gameState);
+        if (typeof setTimeout !== 'undefined') setTimeout(() => { if (gameState.activeCharacterId === enemyCharacter.id) endTurn(); }, 10); else { if (gameState.activeCharacterId === enemyCharacter.id) endTurn(); }
         return;
     }
 
@@ -169,6 +179,7 @@ function processEnemyActionPhase(enemyCharacter: Character): void {
                     moveCharacterLogic(enemyCharacter, decision.targetPosition, gameState.grid);
                     actionTakenThisPhase = true;
                 } else {
+                    actionTakenThisPhase = true; 
                     addMessageToActionLog(`${enemyCharacter.name} decided to move but cannot.`, gameState);
                 }
                 break;
@@ -179,9 +190,11 @@ function processEnemyActionPhase(enemyCharacter: Character): void {
                         performAttack(enemyCharacter, target, decision.actionToUse);
                         actionTakenThisPhase = true;
                     } else {
+                        actionTakenThisPhase = true; 
                         addMessageToActionLog(`${enemyCharacter.name} tries to attack ${decision.targetId} with ${decision.actionToUse.name} but target not found.`, gameState);
                     }
                 } else {
+                     actionTakenThisPhase = true; 
                      addMessageToActionLog(`${enemyCharacter.name} decided to attack but cannot.`, gameState);
                 }
                 break;
@@ -192,9 +205,11 @@ function processEnemyActionPhase(enemyCharacter: Character): void {
                         performSpecialAbility(enemyCharacter, target, decision.actionToUse);
                         actionTakenThisPhase = true;
                     } else {
+                        actionTakenThisPhase = true; 
                         addMessageToActionLog(`${enemyCharacter.name} tries to use ${decision.actionToUse.name} on ${decision.targetId} but target not found.`, gameState);
                     }
                 } else {
+                    actionTakenThisPhase = true; 
                     addMessageToActionLog(`${enemyCharacter.name} decided to use special ability but cannot.`, gameState);
                 }
                 break;
@@ -205,11 +220,11 @@ function processEnemyActionPhase(enemyCharacter: Character): void {
         }
     } else {
         addMessageToActionLog(`${enemyCharacter.name} is unable to decide on an action.`, gameState);
-        actionTakenThisPhase = true;
+        actionTakenThisPhase = true; 
     }
 
     updateCharacterDisplays(gameState.characters);
-    checkWinLossConditions(); // Check win/loss after every AI sub-action
+    checkWinLossConditions(); 
 
     if (gameState.isCombatOver) return;
 
@@ -224,16 +239,13 @@ function processEnemyActionPhase(enemyCharacter: Character): void {
         addMessageToActionLog(`${enemyCharacter.name} considers moving after acting.`, gameState);
         if (typeof setTimeout !== 'undefined') setTimeout(continueTurn, 750); else continueTurn();
     }
-    else { // AI turn segment is over (waited, took final action, or failed to act)
+    else { 
         if (typeof setTimeout !== 'undefined') setTimeout(endAITurn, 1000); else endAITurn();
     }
 }
 
-/**
- * Ends the current character's turn and moves to the next.
- */
 function endTurn(): void {
-    if (gameState.isCombatOver && gameState.activeCharacterId === null) return;
+    if (!gameState || (gameState.isCombatOver && gameState.activeCharacterId === null)) return;
 
     const activeCharBeforeEnd = gameState.characters.find(c => c.id === gameState.activeCharacterId);
     if (activeCharBeforeEnd) {
@@ -247,7 +259,7 @@ function endTurn(): void {
     gameState.selectedAction = null;
     gameState.activeCharacterId = null;
 
-    checkWinLossConditions(); // Check win/loss before starting next turn
+    checkWinLossConditions(); 
     if (!gameState.isCombatOver) {
         startTurn();
     } else {
@@ -259,15 +271,14 @@ function endTurn(): void {
     }
 }
 
-/**
- * Main game loop.
- */
 function gameLoop(timestamp?: number): void {
+    if (!gameState) return; 
+
     if (gameState.isCombatOver && !document.getElementById('game-message-box')?.classList.contains('hidden')) {
-        // Minimal updates
+        //
     }
 
-    if (ctx) {
+    if (ctx) { 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#2D3748";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -320,24 +331,21 @@ function gameLoop(timestamp?: number): void {
             return true;
         });
     }
+    
     if (typeof requestAnimationFrame !== 'undefined') {
-        requestAnimationFrame(gameLoop);
-    }
+        if (!gameState.isCombatOver) { 
+            requestAnimationFrame(gameLoop);
+        }
+     }
 }
 
-/**
- * Adds event listeners for player input.
- */
 function addEventListeners(): void {
-    if (canvas) {
+    if (canvas) { 
         canvas.addEventListener('click', handleCanvasClick);
         canvas.addEventListener('mousemove', handleCanvasMouseMove);
     }
 }
 
-/**
- * Handles clicks on the game canvas for player actions.
- */
 export function handleCanvasClick(event: MouseEvent): void {
     if (!gameState || gameState.isCombatOver || !gameState.isPlayerTurn) return;
 
@@ -411,9 +419,6 @@ export function handleCanvasClick(event: MouseEvent): void {
     updateCharacterDisplays(gameState.characters);
 }
 
-/**
- * Handles mouse movement over the canvas for hover effects.
- */
 export function handleCanvasMouseMove(event: MouseEvent): void {
     if (!gameState || gameState.isCombatOver || !gameState.isPlayerTurn) {
         hoveredTile = null;
@@ -425,9 +430,6 @@ export function handleCanvasMouseMove(event: MouseEvent): void {
     hoveredTile = pixelToGridCoords(mouseX, mouseY);
 }
 
-/**
- * Handles clicks on action buttons.
- */
 export function handleActionButtonClick(actionType: ActionType | 'SPECIAL' | 'END_TURN'): void {
     if (!gameState || gameState.isCombatOver || !gameState.isPlayerTurn) return;
 
@@ -493,17 +495,11 @@ export function handleActionButtonClick(actionType: ActionType | 'SPECIAL' | 'EN
     updateActionButtonsForCurrentCharacter();
 }
 
-/**
- * Handles the End Turn button click.
- */
 function handleEndTurnClick(): void {
     if (!gameState || gameState.isCombatOver || !gameState.isPlayerTurn) return;
     endTurn();
 }
 
-/**
- * Executes an attack action.
- */
 function performAttack(attacker: Character, target: Character, action: GameAction): void {
     if (!attacker.canAct) {
         addMessageToActionLog(`${attacker.name} cannot act anymore this turn.`, gameState);
@@ -519,9 +515,6 @@ function performAttack(attacker: Character, target: Character, action: GameActio
     updateActionButtonsForCurrentCharacter();
 }
 
-/**
- * Executes a special ability.
- */
 function performSpecialAbility(caster: Character, target: Character, action: GameAction): void {
     if (!caster.canAct) {
         addMessageToActionLog(`${caster.name} cannot act anymore this turn.`, gameState);
@@ -549,9 +542,6 @@ function performSpecialAbility(caster: Character, target: Character, action: Gam
     updateActionButtonsForCurrentCharacter();
 }
 
-/**
- * Adds a visual effect to be rendered.
- */
 function addVisualEffect(effect: Omit<VisualEffect, 'id' | 'startTime'>): void {
     visualEffects.push({
         ...effect,
@@ -560,10 +550,8 @@ function addVisualEffect(effect: Omit<VisualEffect, 'id' | 'startTime'>): void {
     });
 }
 
-/**
- * Clears action-related highlights and selections.
- */
 function clearHighlightsAndSelection(): void {
+    if (!gameState) return; 
     reachableMovementTiles = [];
     attackableTargetTiles = [];
     specialAbilityTargetTiles = [];
@@ -572,26 +560,18 @@ function clearHighlightsAndSelection(): void {
     updateActionButtonsForCurrentCharacter();
 }
 
-/**
- * Clears only tile highlight arrays.
- */
 function clearHighlights(): void {
     reachableMovementTiles = [];
     attackableTargetTiles = [];
     specialAbilityTargetTiles = [];
 }
 
-/**
- * Updates action button states.
- */
 function updateActionButtonsForCurrentCharacter(): void {
+    if (!gameState) return; 
     const activeCharacter = gameState.characters.find(c => c.id === gameState.activeCharacterId);
-    updateActionButtons(activeCharacter, gameState.isPlayerTurn, gameState.selectedAction);
+    updateActionButtons(activeCharacter ?? null, gameState.isPlayerTurn, gameState.selectedAction);
 }
 
-/**
- * Checks for win/loss conditions.
- */
 function checkWinLossConditions(): void {
     if (!gameState || gameState.isCombatOver) return;
 
@@ -611,9 +591,6 @@ function checkWinLossConditions(): void {
     }
 }
 
-/**
- * Resets the game.
- */
 function resetGame(): void {
     console.log("Resetting game...");
     hideGameMessage();
@@ -630,7 +607,6 @@ if (typeof document !== 'undefined' && document.readyState !== 'loading') {
 }
 
 // --- Test Hooks ---
-// Exported ONLY for testing purposes.
 export function getGameState_TEST_HOOK(): GameState {
     return gameState;
 }
@@ -639,7 +615,6 @@ export function clearVisualEffects_TEST_HOOK(): void {
     visualEffects = [];
 }
 
-// Note: Other functions like getReachableTiles, getTargetableTiles, getEnemyAIAction, processAttack
-// are imported by tests directly from their respective modules (grid.ts, ai.ts, combat.ts).
-// No need to re-export them here unless they were private to main.ts and needed exposure.
-
+export function getAttackableTargetTiles_TEST_HOOK(): GridPoint[] {
+    return attackableTargetTiles;
+}

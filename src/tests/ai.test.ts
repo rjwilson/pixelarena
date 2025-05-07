@@ -125,7 +125,7 @@ describe('AI System - getEnemyAIAction', () => {
         // The current AI returns 'move' first, then main.ts calls AI again for action.
         // So, we expect a 'move' decision towards the Mage.
         expect(decision?.type).toBe('move');
-        expect(decision?.targetPosition).toEqual({ x: 1, y: 3 }); // Moves to engage Mage
+        expect(decision?.targetPosition).toEqual({ x: 1, y: 2 }); // Moves to engage Mage
     });
 
 

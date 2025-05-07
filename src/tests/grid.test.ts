@@ -205,7 +205,8 @@ describe('Grid System', () => {
             // (1,1) -> (1,3), (3,1), (0,0), (0,2), (2,0), (2,2)
             // Plus the 4 at dist 1. Total = 4 (dist 1) + 8 (dist 2, corners and straights) = 12
             const reachable = getReachableTiles(startPos, 2, grid, charAtStart);
-            expect(reachable.length).toBe(8); // (0,1),(2,1),(1,0),(1,2) | (0,2),(2,2),(2,0),(0,0) | (1,3),(3,1)
+            // Corrected assertion: Expect 10 reachable tiles for range 2 (excluding start)
+            expect(reachable.length).toBe(10); // (0,1),(2,1),(1,0),(1,2) | (0,0),(0,2),(2,0),(2,2),(1,3),(3,1)
                                             // (0,0) (1,0) (2,0)
                                             // (0,1)       (2,1)
                                             // (0,2) (1,2) (2,2)
@@ -227,9 +228,9 @@ describe('Grid System', () => {
             // (0,0), (2,0), (0,2), (2,2) - 4 tiles (diagonals from start, or straight from dist 1)
             // (1,3), (3,1) - 2 tiles (straight from dist 1, if grid large enough)
             // (-1,0)X, (0,-1)X etc.
-            // Total for range 2 from (1,1) on a large enough grid is 4 (dist 1) + 8 (dist 2) = 12 tiles.
+            // Total for range 2 from (1,1) on a large enough grid is 4 (dist 1) + 6 (dist 2) = 10 tiles (Manhattan distance).
             // The test grid is 10x10. (3,1) and (1,3) are valid.
-            expect(reachable.length).toBe(12);
+            expect(reachable.length).toBe(10);
         });
 
         it('should be constrained by grid boundaries', () => {
@@ -313,4 +314,3 @@ describe('Grid System', () => {
         });
     });
 });
-
