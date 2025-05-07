@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Turn-Based Combat</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container" class="flex flex-col items-center justify-center min-h-screen bg-gray-800 p-4">
+        <h1 class="text-3xl font-bold text-white mb-4 font-press-start">Pixel Combat Arena</h1>
+
+        <div id="game-area" class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-6xl">
+            <div id="player-party-info" class="bg-gray-700 p-4 rounded-lg shadow-lg col-span-1 md:order-1">
+                <h2 class="text-xl font-bold text-yellow-400 mb-3 border-b-2 border-yellow-500 pb-2 font-press-start">Your Party</h2>
+                <div id="player-characters-display">
+                    </div>
+            </div>
+
+            <div id="center-column" class="col-span-1 md:col-span-1 md:order-2 flex flex-col items-center">
+                <canvas id="game-canvas" class="bg-gray-600 rounded-lg shadow-lg border-2 border-gray-500"></canvas>
+                <div id="action-log" class="mt-4 p-3 bg-gray-700 rounded-lg shadow-lg w-full h-32 overflow-y-auto text-sm text-gray-300">
+                    <p class="font-semibold text-green-400">Game Log:</p>
+                    </div>
+            </div>
+
+            <div id="enemy-and-ui-info" class="bg-gray-700 p-4 rounded-lg shadow-lg col-span-1 md:order-3">
+                <h2 class="text-xl font-bold text-red-400 mb-3 border-b-2 border-red-500 pb-2 font-press-start">Enemies</h2>
+                <div id="enemy-characters-display">
+                    </div>
+                <div id="turn-indicator" class="mt-6 p-3 bg-gray-900 rounded-lg shadow-md text-center">
+                    <p class="text-lg font-bold text-blue-400 font-press-start">Turn: <span id="current-turn-character">Player 1</span></p>
+                </div>
+                <div id="action-menu" class="mt-4 p-3 bg-gray-900 rounded-lg shadow-md">
+                    <h3 class="text-md font-semibold text-green-300 mb-2 font-press-start">Actions</h3>
+                    <div id="actions-container" class="grid grid-cols-2 gap-2">
+                        <button id="move-button" class="action-button">Move</button>
+                        <button id="attack-button" class="action-button">Attack</button>
+                        <button id="special-button" class="action-button">Special</button>
+                        <button id="end-turn-button" class="action-button col-span-2">End Turn</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="game-message-box" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-4">
+            <div class="bg-gray-800 p-8 rounded-lg shadow-xl text-center max-w-md">
+                <h2 id="message-title" class="text-2xl font-bold text-yellow-400 mb-4 font-press-start">Game Over!</h2>
+                <p id="message-text" class="text-white text-lg mb-6">You have been defeated.</p>
+                <button id="message-close-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md font-press-start transition duration-150 ease-in-out">Restart</button>
+            </div>
+        </div>
+
+    </div>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Tailwind custom theme (if needed, for now default is fine)
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'press-start': ['"Press Start 2P"', 'cursive'],
+                    },
+                }
+            }
+        }
+    </script>
+    <script type="module">
+        import { initializeGame } from './dist/main.js';
+        if (document.readyState !== 'loading') {
+            initializeGame();
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                initializeGame();
+            });
+        }
+    </script>
+</body>
+</html>
+
