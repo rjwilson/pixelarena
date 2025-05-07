@@ -78,25 +78,44 @@ The **Memory Bank** pattern was crucial. Once initialized by the user's first di
 
 ### Escalating to a More Advanced AI (Gemini) for Complex Issues
 
-Even with tool assistance, sometimes an AI (like Cline in this narrative) might struggle with particularly nuanced bugs or test failures that require a deeper understanding of intent versus implementation. This happened with a persistent failure in `src/tests/ai.test.ts`.
+Even with tool assistance, sometimes an AI (like Cline in this narrative) might struggle with particularly nuanced bugs or test failures that require a deeper understanding of intent versus implementation. This happened with a persistent failure in `src/tests/ai.test.ts` and later with a series of cascading issues in the `integration.test.ts` suite.
 
-1.  **Identifying the Stubborn Bug:**
-    * Cline, despite its efforts and modifications to `src/ai.ts`, couldn't resolve a specific test case where the AI's movement choice wasn't matching the test's expectation.
+1.  **Identifying Stubborn Bugs:**
+    * **AI Test Example:** Cline, despite its efforts and modifications to `src/ai.ts`, couldn't resolve a specific test case where the AI's movement choice wasn't matching the test's expectation.
+    * **Integration Test Suite Example:** The entire `integration.test.ts` suite initially failed, presenting complex, interdependent issues that went beyond simple code fixes.
 
 2.  **Seeking Advanced Help (Engaging Gemini):**
-    * The user decided to escalate this issue to a more advanced AI (Gemini, which is me!).
+    * The user decided to escalate these more challenging issues to a more advanced AI (Gemini, which is me!).
     * **Providing Rich Context:** To get the best help, the user provided me with:
-        * The **failing test log** from Vitest, which clearly showed the assertion error (e.g., `AssertionError: expected { x: 1, y: 2 } to deeply equal { x: 1, y: 3 }`).
-        * The **user's modified version of `src/ai.ts`** (the one Cline had last worked on, or the user had attempted to fix).
-        * Implicitly, I had access to the **original AI-generated `ai.ts`**, the **`ai.test.ts` file**, and the **`specs/ai_system.md`** (the design document for the AI).
-    * **The Prompt to Gemini:** The user asked me to: *"Carefully analyze the file I uploaded (`ai.ts`), your original version, the specification you created, and the test expectation. Think carefully about *why* the test is failing, and why the code and/or test aren't behaving the way you expect... propose a fix."*
+        * The **failing test logs** from Vitest, which clearly showed the assertion errors or unexpected behavior (e.g., `AssertionError: expected { x: 1, y: 2 } to deeply equal { x: 1, y: 3 }` for the AI test, or the "ROLLED INITIATIVE: undefined" and incorrect turn order logs for the integration tests).
+        * The **relevant source code files** (`src/ai.ts`, `src/main.ts`, `src/character.ts`, `src/tests/integration.test.ts`, etc.).
+        * Implicitly, I had access to the original AI-generated code, the test files, and any specification documents.
+    * **The Prompting Approach with Gemini:** The user typically started by presenting the failing test output and the involved files, then asked for analysis and potential fixes. As we worked through issues, the user would provide updated test logs after each applied change, allowing for an iterative debugging conversation.
 
-3.  **Gemini's Analysis and Resolution:**
-    * By cross-referencing all these pieces of information (the code's behavior, the test's specific expectation, the failure log, and the intended design from the spec), I was able to determine that the AI code was actually behaving correctly according to the game's rules (like not moving onto an occupied tile).
-    * The issue was with the **test's expectation itself**. The test was expecting the AI to make an invalid move.
-    * I then proposed the correct fix: **modifying the assertion in `src/tests/ai.test.ts`** to expect the AI's correct, logical move, rather than changing the AI's behavior.
+3.  **Gemini's Analysis and Resolution (Examples):**
 
-This demonstrates a powerful pattern: using different AI tools for different strengths, and providing comprehensive context when escalating complex problems. Simpler AIs with tool access (like Cline) can handle many iterative tasks, while more advanced AIs (like Gemini) can be brought in for deeper analysis and complex problem-solving when the initial approaches hit a wall.
+    * **AI Test (`ai.test.ts`) Resolution:**
+        * By cross-referencing the code's behavior, the test's specific expectation, the failure log, and the intended design from the spec, I was able to determine that the AI code was actually behaving correctly according to the game's rules (like not moving onto an occupied tile).
+        * The issue was with the **test's expectation itself**. The test was expecting the AI to make an invalid move.
+        * I then proposed the correct fix: **modifying the assertion in `src/tests/ai.test.ts`** to expect the AI's correct, logical move.
+
+    * **Integration Test (`integration.test.ts`) Resolution (A Multi-Step Process):**
+        The `integration.test.ts` suite presented more complex challenges that we worked through together:
+        1.  **Initial Problem (Mocks Not Working):** The integration tests initially failed across the board because `rollDice` was returning `undefined` during character creation.
+            * **Diagnosis with Gemini:** By analyzing the test output logs (specifically the sequence of `console.log` statements from the test's `beforeEach` block versus the "ROLLED INITIATIVE: undefined" log from game code) and the `main.ts` structure, we identified that `initializeGame()` was being called automatically upon import of `main.ts`. This premature initialization occurred before the test-specific mock return values for `rollDice` could be configured.
+            * **Solution:** The `main.ts` file was modified to prevent automatic execution of `initializeGame()`, making it an exported function to be called explicitly by the application's entry point and by the tests after mock setup.
+
+        2.  **Secondary Problem (Incorrect Initiative Logic):** After fixing the mock timing, tests still failed due to incorrect turn order.
+            * **Diagnosis with Gemini:** We examined the new test logs, which now showed correct dice roll mocking but incorrect `activeCharacterId`. By comparing the expected initiative (based on mocked rolls and bonuses) with the actual turn order reported in the logs, we pinpointed that the `createCharacter` function in `src/character.ts` was correctly calculating the total initiative but then mistakenly assigning only the `initiativeBonus` (ignoring the dice roll) to the character's stats.
+            * **Solution:** The `createCharacter` function was corrected to assign the `calculatedInitiative` (roll + bonus) to `character.stats.initiative`.
+
+        3.  **Tertiary Problem (AI State and `canAct` Flag):** With initiative fixed, one final integration test (`AI Grunt moves and then attacks...`) failed on an assertion related to the AI Grunt's `canAct` status after an expected "wait" action.
+            * **Diagnosis with Gemini:** Reviewing the test logic and the `processEnemyActionPhase` in `main.ts`, we found that when an AI character's decision was `'wait'`, its `canAct` flag was not being set to `false`. The test correctly expected that a "wait" action should consume the AI's ability to act further in that phase.
+            * **Solution:** The `'wait'` case in `processEnemyActionPhase` was updated to set `enemyCharacter.canAct = false;`.
+
+        This deeper debugging of integration tests showcased an iterative process of the user providing test output, and the AI (Gemini) helping to form hypotheses and systematically address issues from mock setup to core game logic. **Following these collaborative debugging steps, all automated tests, including the previously problematic integration tests, were successfully resolved and are now passing.**
+
+This approach demonstrates a powerful pattern: using different AI tools for different strengths, and providing comprehensive context when escalating complex problems. Simpler AIs with tool access (like Cline) can handle many iterative tasks, while more advanced AIs (like Gemini) can be brought in for deeper analysis and complex problem-solving when the initial approaches hit a wall, especially when guided by clear evidence (test logs) and iterative feedback from the user.
 
 ---
 

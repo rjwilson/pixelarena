@@ -9,32 +9,14 @@ export interface AIActionDecision {
     actionToUse?: GameAction; // The specific GameAction object to use
 }
 
-/**
- * Determines the AI's next action based on a more refined logic.
- *
- * AI Behavior Priority:
- * 1. If can use an offensive special ability on a player in range, do it.
- * 2. If can use a standard attack on a player in range, do it.
- * 3. If can move to a position to attack a player this turn (special or standard), do it.
- * 4. If cannot attack this turn, move towards the nearest player.
- * 5. If no actions are possible, wait.
- *
- * Target Prioritization:
- * - Prefers targets with lower current HP.
- * - If HP is similar, prefers closer targets.
- *
- * @param aiCharacter The AI character making the decision.
- * @param gameState The current state of the game.
- * @returns An AIActionDecision object or null if no action can be taken.
- */
 export function getEnemyAIAction(aiCharacter: Character, gameState: GameState): AIActionDecision | null {
     if (!aiCharacter.isAlive) return null;
 
     const playerCharacters = gameState.characters.filter(c => c.type === CharacterType.PLAYER && c.isAlive);
-    if (playerCharacters.length === 0) return { type: 'wait' }; // No targets
+    if (playerCharacters.length === 0) return { type: 'wait' };
 
-    // Sort players by HP (ascending), then by distance (ascending) as a tie-breaker
-    const sortedPlayerTargets = [...playerCharacters].sort((a, b) => {
+    // Sort players by HP (ascending), then by distance from AI (ascending) as a tie-breaker
+    const sortedPlayerTargetsGlobal = [...playerCharacters].sort((a, b) => {
         if (a.stats.currentHp !== b.stats.currentHp) {
             return a.stats.currentHp - b.stats.currentHp;
         }
@@ -42,14 +24,18 @@ export function getEnemyAIAction(aiCharacter: Character, gameState: GameState): 
         const distB = Math.abs(aiCharacter.position.x - b.position.x) + Math.abs(aiCharacter.position.y - b.position.y);
         return distA - distB;
     });
+    // console.log(`AI (${aiCharacter.name}) sorted global targets:`, sortedPlayerTargetsGlobal.map(t => ({ name: t.name, hp: t.stats.currentHp, pos: t.position })));
 
-    // --- Attempt to use an action (Special Ability or Attack) if possible from current position ---
+
+    // --- 1. Attempt to use an action (Special Ability or Attack) if possible from CURRENT position ---
     if (aiCharacter.canAct) {
         // Prioritize offensive special abilities
-        const specialAbilities = aiCharacter.actions.filter(a => a.type === ActionType.SPECIAL_ABILITY && a.range && (a.damage || a.effect)); // Assuming damage or effect implies offensive
+        const specialAbilities = aiCharacter.actions.filter(a => a.type === ActionType.SPECIAL_ABILITY && a.range && (a.damage || a.effect));
         for (const special of specialAbilities) {
-            const targetsInRange = findCharactersInRange(aiCharacter.position, special.range!, sortedPlayerTargets, false);
+            // Check against all potential targets, sorted by global preference
+            const targetsInRange = findCharactersInRange(aiCharacter.position, special.range!, sortedPlayerTargetsGlobal, false);
             if (targetsInRange.length > 0) {
+                // console.log(`AI (${aiCharacter.name}) can use SPECIAL (${special.name}) on ${targetsInRange[0].name} from current position.`);
                 return { type: 'special', targetId: targetsInRange[0].id, actionToUse: special };
             }
         }
@@ -57,103 +43,111 @@ export function getEnemyAIAction(aiCharacter: Character, gameState: GameState): 
         // Then try standard attacks
         const attackActions = aiCharacter.actions.filter(a => a.type === ActionType.ATTACK && a.range);
         for (const attack of attackActions) {
-            const targetsInRange = findCharactersInRange(aiCharacter.position, attack.range!, sortedPlayerTargets, false);
+            const targetsInRange = findCharactersInRange(aiCharacter.position, attack.range!, sortedPlayerTargetsGlobal, false);
             if (targetsInRange.length > 0) {
+                // console.log(`AI (${aiCharacter.name}) can ATTACK (${attack.name}) ${targetsInRange[0].name} from current position.`);
                 return { type: 'attack', targetId: targetsInRange[0].id, actionToUse: attack };
             }
         }
     }
 
-    // --- Attempt to move then act (if still has action) ---
+    // --- 2. Attempt to MOVE then ACT (if still has action) ---
     if (aiCharacter.canMove) {
         const reachableTiles = getReachableTiles(aiCharacter.position, aiCharacter.stats.speed, gameState.grid, gameState.characters);
-        let bestMoveOption: { movePos: GridPoint; action?: AIActionDecision } | null = null;
-        let bestMoveScore = -Infinity; // Higher is better (e.g., can attack after move)
+        let bestMoveForAction: { movePos: GridPoint; actionDecision: AIActionDecision; score: number } | null = null;
 
         for (const movePos of reachableTiles) {
-            // Temporarily simulate being at movePos to check for actions
-            const tempAiPosition = movePos;
-            let currentScore = -Infinity; // Score this potential move, reset for each movePos
-            let actionEnabled = false;
+            if (!aiCharacter.canAct) break; // No point evaluating actions if AI cannot act after moving
 
-            // Can we act after moving?
-            if (aiCharacter.canAct) {
-                 // Check special abilities from new position
-                const specialAbilities = aiCharacter.actions.filter(a => a.type === ActionType.SPECIAL_ABILITY && a.range && (a.damage || a.effect));
-                for (const special of specialAbilities) {
-                    const targetsFromNewPos = findCharactersInRange(tempAiPosition, special.range!, sortedPlayerTargets, false);
-                    if (targetsFromNewPos.length > 0) {
-                        // Score for special ability: High base + bonus for lower HP target
-                        currentScore = 1000 + (100 - (targetsFromNewPos[0].stats.currentHp / targetsFromNewPos[0].stats.maxHp) * 100);
-                        actionEnabled = true;
-                        // If this is the first action-enabling move found, or it has a higher score, update best option
-                        if (bestMoveOption === null || !bestMoveOption.action || currentScore > bestMoveScore) {
-                             bestMoveScore = currentScore;
-                             bestMoveOption = { movePos, action: { type: 'special', targetId: targetsFromNewPos[0].id, actionToUse: special }};
-                        }
-                         // Found a special ability, no need to check attacks from this position
-                        break; 
+            // Simulate being at movePos to check for actions
+            // Prioritize special abilities from new position
+            const specialAbilities = aiCharacter.actions.filter(a => a.type === ActionType.SPECIAL_ABILITY && a.range && (a.damage || a.effect));
+            for (const special of specialAbilities) {
+                const targetsFromNewPos = findCharactersInRange(movePos, special.range!, sortedPlayerTargetsGlobal, false);
+                if (targetsFromNewPos.length > 0) {
+                    const target = targetsFromNewPos[0];
+                    const score = 1000 + (100 - (target.stats.currentHp / target.stats.maxHp) * 100) - (Math.abs(movePos.x - aiCharacter.position.x) + Math.abs(movePos.y - aiCharacter.position.y)); // Prefer closer moves
+                    if (bestMoveForAction === null || score > bestMoveForAction.score) {
+                        bestMoveForAction = {
+                            movePos,
+                            actionDecision: { type: 'special', targetId: target.id, actionToUse: special },
+                            score
+                        };
                     }
-                }
-
-                // If no special ability found from this position, check standard attacks
-                if (!actionEnabled) {
-                    const attackActions = aiCharacter.actions.filter(a => a.type === ActionType.ATTACK && a.range);
-                    for (const attack of attackActions) {
-                        const targetsFromNewPos = findCharactersInRange(tempAiPosition, attack.range!, sortedPlayerTargets, false);
-                        if (targetsFromNewPos.length > 0) {
-                            // Score for attack: High base (lower than special) + bonus for lower HP target
-                            currentScore = 800 + (100 - (targetsFromNewPos[0].stats.currentHp / targetsFromNewPos[0].stats.maxHp) * 100);
-                            actionEnabled = true;
-                             // If this is the first action-enabling move found, or it has a higher score, update best option
-                            if (bestMoveOption === null || !bestMoveOption.action || currentScore > bestMoveScore) {
-                                bestMoveScore = currentScore;
-                                bestMoveOption = { movePos, action: { type: 'attack', targetId: targetsFromNewPos[0].id, actionToUse: attack }};
-                            }
-                            // Found an attack, no need to check other attacks from this position
-                            break;
-                        }
-                    }
+                    // Found a special for this movePos, might be improved by another movePos but don't check other specials from *this* movePos
+                    // break; // Potentially break if one special is "good enough" or continue to find best special from this spot
                 }
             }
-            
-            // If no action possible after moving from this tile, score based on proximity to closest target
-            // Only consider this if no action-enabling move has been found yet (bestMoveOption is null or bestMoveOption.action is undefined)
-            if (!actionEnabled && (bestMoveOption === null || !bestMoveOption.action)) {
-                 if (sortedPlayerTargets.length > 0) {
-                    const closestTarget = sortedPlayerTargets[0];
-                    const distToTarget = Math.abs(movePos.x - closestTarget.position.x) + Math.abs(movePos.y - closestTarget.position.y);
-                    currentScore = 100 - distToTarget * 10; // Closer is better (max 100)
-                    if (currentScore > bestMoveScore) {
-                        bestMoveScore = currentScore;
-                        bestMoveOption = { movePos, action: undefined }; // Just move, no immediate action after
+
+            // If no special ability found from this movePos, check standard attacks
+            if (bestMoveForAction === null || (bestMoveForAction.movePos.x !== movePos.x || bestMoveForAction.movePos.y !== movePos.y) || bestMoveForAction.actionDecision.type !== 'special') {
+                const attackActions = aiCharacter.actions.filter(a => a.type === ActionType.ATTACK && a.range);
+                for (const attack of attackActions) {
+                    const targetsFromNewPos = findCharactersInRange(movePos, attack.range!, sortedPlayerTargetsGlobal, false);
+                    if (targetsFromNewPos.length > 0) {
+                        const target = targetsFromNewPos[0];
+                        const score = 800 + (100 - (target.stats.currentHp / target.stats.maxHp) * 100) - (Math.abs(movePos.x - aiCharacter.position.x) + Math.abs(movePos.y - aiCharacter.position.y)); // Prefer closer moves
+                        if (bestMoveForAction === null || score > bestMoveForAction.score) {
+                            bestMoveForAction = {
+                                movePos,
+                                actionDecision: { type: 'attack', targetId: target.id, actionToUse: attack },
+                                score
+                            };
+                        }
+                        // break; // Potentially break
                     }
                 }
             }
         }
 
-        if (bestMoveOption) {
-            // If the best move leads to an action, the AI will move then `main.ts` needs to re-evaluate for the action.
-            // For now, this function returns the move. The main game loop will handle the subsequent action if `canAct` is still true.
-            // Or, we can make AI return a sequence: [move, attack/special]
-            // Let's return just the move for now, and AI will re-evaluate action in its next "thought" if it moved.
-            // This is simpler for the current game loop structure.
-             const tileToMove = getTile(gameState.grid, bestMoveOption.movePos.x, bestMoveOption.movePos.y);
-             if (tileToMove && (!tileToMove.isOccupied || tileToMove.occupyingCharacterId === aiCharacter.id)) {
-                // If the best move also identified a subsequent action, we could return that too,
-                // but main.ts currently handles AI actions in discrete steps.
-                // So, just return the move. If AI still `canAct` after moving, `getEnemyAIAction` will be called again.
-                // This is slightly inefficient but fits the current structure.
-                // A better way: if bestMoveOption.action exists, it means AI plans to move AND act.
-                // However, the current `enemyTurn` in main.ts calls `getEnemyAIAction` once, performs the action,
-                // then if it was a move and AI can still act, it calls `getEnemyAIAction` again. This is fine.
+        if (bestMoveForAction) {
+            // console.log(`AI (${aiCharacter.name}) chose to MOVE to ${JSON.stringify(bestMoveForAction.movePos)} to then ${bestMoveForAction.actionDecision.type} ${bestMoveForAction.actionDecision.targetId}`);
+            return { type: 'move', targetPosition: bestMoveForAction.movePos };
+        }
 
-                return { type: 'move', targetPosition: bestMoveOption.movePos };
-             }
+        // --- 3. If no action possible even after moving, move towards GEOGRAPHICALLY CLOSEST player ---
+        // This part is reached if bestMoveForAction is still null (no move leads to an attack/special)
+        let bestMoveToGetCloser: { movePos: GridPoint; score: number } | null = null;
+
+        // Find the GEOGRAPHICALLY closest player
+        let geographicallyClosestPlayer: Character | null = null;
+        let minGeoDistance = Infinity;
+        for (const player of playerCharacters) {
+            const dist = Math.abs(aiCharacter.position.x - player.position.x) + Math.abs(aiCharacter.position.y - player.position.y);
+            if (dist < minGeoDistance) {
+                minGeoDistance = dist;
+                geographicallyClosestPlayer = player;
+            }
+        }
+
+        if (geographicallyClosestPlayer) {
+            // console.log(`AI (${aiCharacter.name}) is just moving. Geographically closest target: ${geographicallyClosestPlayer.name} at dist ${minGeoDistance}`);
+            const originalDistanceToGeoTarget = minGeoDistance;
+
+            for (const movePos of reachableTiles) {
+                const distToGeoTargetFromMovePos = Math.abs(movePos.x - geographicallyClosestPlayer.position.x) + Math.abs(movePos.y - geographicallyClosestPlayer.position.y);
+                let currentScore = 0;
+
+                if (distToGeoTargetFromMovePos < originalDistanceToGeoTarget) {
+                    currentScore = 200 - distToGeoTargetFromMovePos * 5 - (Math.abs(movePos.x - aiCharacter.position.x) + Math.abs(movePos.y - aiCharacter.position.y)); // Higher score for strictly closer tiles, factor in move cost
+                } else {
+                    currentScore = 100 - distToGeoTargetFromMovePos * 5 - (Math.abs(movePos.x - aiCharacter.position.x) + Math.abs(movePos.y - aiCharacter.position.y)); // Lower base score if not strictly closer
+                }
+
+                if (bestMoveToGetCloser === null || currentScore > bestMoveToGetCloser.score) {
+                    bestMoveToGetCloser = { movePos, score: currentScore };
+                }
+            }
+        }
+
+        if (bestMoveToGetCloser) {
+            // console.log(`AI (${aiCharacter.name}) chose to MOVE to ${JSON.stringify(bestMoveToGetCloser.movePos)} just to get closer.`);
+            return { type: 'move', targetPosition: bestMoveToGetCloser.movePos };
         }
     }
 
-    // --- If no other action, wait ---
-    // This also covers the case where aiCharacter.canAct and aiCharacter.canMove are both false.
+    // --- 4. If no other action (or cannot move), wait ---
+    // console.log(`AI (${aiCharacter.name}) decides to WAIT.`);
     return { type: 'wait' };
 }
+

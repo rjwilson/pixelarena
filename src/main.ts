@@ -113,7 +113,7 @@ export function initializeGame(): void {
     updateTurnIndicator(gameState.activeCharacterId ? gameState.characters.find(c => c.id === gameState.activeCharacterId) ?? null : null);
     updateActionButtonsForCurrentCharacter();
 
-    console.log("Game Initialized", gameState);
+    console.log("Game Initialized");
     if (typeof requestAnimationFrame !== 'undefined') {
         gameLoop();
     }
@@ -215,6 +215,7 @@ function processEnemyActionPhase(enemyCharacter: Character): void {
                 break;
             case 'wait':
                 addMessageToActionLog(`${enemyCharacter.name} waits.`, gameState);
+                enemyCharacter.canAct = false;
                 actionTakenThisPhase = true;
                 break;
         }
@@ -597,13 +598,6 @@ function resetGame(): void {
     visualEffects = [];
     clearHighlightsAndSelection();
     initializeGame();
-}
-
-// --- Game Start ---
-if (typeof document !== 'undefined' && document.readyState !== 'loading') {
-    initializeGame();
-} else if (typeof document !== 'undefined') {
-    document.addEventListener('DOMContentLoaded', initializeGame);
 }
 
 // --- Test Hooks ---

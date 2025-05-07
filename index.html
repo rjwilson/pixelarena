@@ -67,6 +67,16 @@
         }
     </script>
     <script type="module" src="dist/main.js"></script>
+    <script type="module">
+        import { initializeGame } from './dist/main.js';
+        if (document.readyState !== 'loading') {
+            initializeGame();
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                initializeGame();
+            });
+        }
+    </script>
 </body>
 </html>
 

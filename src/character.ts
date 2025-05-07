@@ -63,7 +63,6 @@ export function createCharacter(
         processedActions.push(special);
     }
 
-
     const newChar: Character = {
         id,
         name: config.name,
@@ -71,7 +70,7 @@ export function createCharacter(
         stats: {
             ...config.stats,
             currentHp: config.stats.maxHp, // Start with full health
-            initiative: rollDice(20) + config.stats.initiativeBonus, // Roll initiative
+            initiative: rollDice(20) + config.stats.initiativeBonus,
         },
         position: initialPosition,
         sprite: config.sprite,

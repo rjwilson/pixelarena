@@ -251,5 +251,34 @@ describe('AI System - getEnemyAIAction', () => {
         }
     });
 
-});
+    it('Grunt should decide to MOVE closer if target is out of attack range even after any single potential move action', () => {
+        // Setup Phase
+        // Grunt at (1,1), speed 2. Warrior at (1,6) (Manhattan distance 5).
+        // Grunt's Scimitar range is 1. Even moving 2 tiles (e.g., to (1,3)), Warrior is still out of range.
+        setupCharacters({ x: 1, y: 1 }, { x: 9, y: 9 }, { x: 1, y: 6 }, { x: 9, y: 9 });
+        aiGrunt.stats.speed = 2;
 
+        // Action Phase
+        const decision = getEnemyAIAction(aiGrunt, gameState);
+
+        // Assertion Phase
+        expect(decision).toBeDefined();
+        expect(decision?.type).toBe('move');
+        expect(decision?.targetPosition).toBeDefined();
+
+        if (decision?.targetPosition) {
+            // Calculate move distance
+            const moveDistance = Math.abs(decision.targetPosition.x - 1) + Math.abs(decision.targetPosition.y - 1);
+            expect(moveDistance).toBeLessThanOrEqual(aiGrunt.stats.speed);
+
+            // Calculate distances to Warrior
+            const originalDistanceToWarrior = Math.abs(aiGrunt.position.x - playerWarrior.position.x) + Math.abs(aiGrunt.position.y - playerWarrior.position.y);
+            const newDistanceToWarrior = Math.abs(decision.targetPosition.x - playerWarrior.position.x) + Math.abs(decision.targetPosition.y - playerWarrior.position.y);
+            expect(newDistanceToWarrior).toBeLessThan(originalDistanceToWarrior);
+
+            // Should not have an action planned after this move
+            expect(decision?.actionToUse).toBeUndefined();
+        }
+    });
+
+});
