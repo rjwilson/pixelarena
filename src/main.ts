@@ -80,6 +80,8 @@ export function initializeGame(): void {
         actionLog: ["Game Started!"],
     };
 
+    initializeUI(gameState, handleActionButtonClick, handleEndTurnClick, resetGame);
+
     INITIAL_PARTY_SETUP.forEach(setup => {
         let config;
         if (setup.configName === "Warrior") config = PLAYER_WARRIOR_CONFIG;
@@ -105,7 +107,6 @@ export function initializeGame(): void {
 
     startTurn();
 
-    initializeUI(gameState, handleActionButtonClick, handleEndTurnClick, resetGame);
     addEventListeners();
 
     updateCharacterDisplays(gameState.characters);
