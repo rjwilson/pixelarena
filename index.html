@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>2D Turn-Based Combat</title>
-    <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="/pixelarena/assets/index-CoiRlbzw.js"></script>
+  <link rel="stylesheet" crossorigin href="/pixelarena/assets/index-CeV2cUDH.css">
 </head>
 <body>
     <div id="game-container" class="flex flex-col items-center justify-center min-h-screen bg-gray-800 p-4">
@@ -64,16 +65,6 @@
                     },
                 }
             }
-        }
-    </script>
-    <script type="module">
-        import { initializeGame } from './dist/main.js';
-        if (document.readyState !== 'loading') {
-            initializeGame();
-        } else {
-            document.addEventListener('DOMContentLoaded', () => {
-                initializeGame();
-            });
         }
     </script>
 </body>
